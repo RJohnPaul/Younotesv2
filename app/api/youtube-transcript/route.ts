@@ -5,10 +5,18 @@ export async function POST(request: Request) {
     const body = await request.json();
     
     // Forward the request to our FastAPI backend
-    const apiUrl = process.env.NODE_ENV === "development" 
+    let apiUrl = process.env.NODE_ENV === "development" 
       ? "http://127.0.0.1:8000" 
-      : process.env.FASTAPI_URL || "http://127.0.0.1:8000";
-      
+      : process.env.NEXT_PUBLIC_FASTAPI_URL;
+    
+    // Use hardcoded fallback if environment variable is not set
+    if (!apiUrl) {
+      console.error("FASTAPI_URL environment variable is undefined, using fallback URL");
+      apiUrl = "https://younotesv2.onrender.com";
+    }
+    
+    console.log("Using API URL:", apiUrl); // Debug log
+    
     const response = await fetch(`${apiUrl}/api/py/youtube-transcript`, {
       method: "POST",
       headers: {
