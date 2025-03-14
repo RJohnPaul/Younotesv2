@@ -1,40 +1,51 @@
 import { NextResponse } from "next/server";
 
+export const maxDuration = 30; // Increase timeout limit to 30 seconds (requires Vercel Pro plan)
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    const apiUrl = "https://younotesv2.onrender.com";
     
-    // Forward the request to our FastAPI backend
-    let apiUrl = process.env.NODE_ENV === "development" 
-      ? "http://127.0.0.1:8000" 
-      : process.env.NEXT_PUBLIC_FASTAPI_URL;
+    console.log("Fetching transcript from:", apiUrl);
     
-    // Use hardcoded fallback if environment variable is not set
-    if (!apiUrl) {
-      console.error("FASTAPI_URL environment variable is undefined, using fallback URL");
-      apiUrl = "https://younotesv2.onrender.com";
+    // Add timeout to fetch request
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 second timeout
+    
+    try {
+      const response = await fetch(`${apiUrl}/api/py/youtube-transcript`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId); // Clear timeout if fetch completes
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        return NextResponse.json(
+          { error: data.detail || "Failed to fetch transcript" },
+          { status: response.status }
+        );
+      }
+      
+      return NextResponse.json(data);
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId);
+      if (fetchError.name === 'AbortError') {
+        // This was a timeout
+        return NextResponse.json(
+          { error: "Backend service took too long to respond. It might be waking up from sleep mode. Please try again." },
+          { status: 504 }
+        );
+      }
+      throw fetchError;
     }
-    
-    console.log("Using API URL:", apiUrl); // Debug log
-    
-    const response = await fetch(`${apiUrl}/api/py/youtube-transcript`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
-    
-    const data = await response.json();
-    
-    if (!response.ok) {
-      return NextResponse.json(
-        { error: data.detail || "Failed to fetch transcript" },
-        { status: response.status }
-      );
-    }
-    
-    return NextResponse.json(data);
   } catch (error: any) {
     console.error("Error in youtube-transcript API route:", error);
     return NextResponse.json(
